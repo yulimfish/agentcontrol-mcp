@@ -2,6 +2,15 @@
 
 AgentControl MCP 是 AgentControl 面向 AI 的 Model Context Protocol 服务。它暴露 MCP 工具，并调用运行在用户 Minecraft 客户端中的 AgentControl Fabric 模组。
 
+## GitHub 仓库
+
+| 仓库 | 地址 |
+|------|------|
+| 本项目（MCP） | https://github.com/yulimfish/agentcontrol-mcp |
+| 总仓 | https://github.com/yulimfish/agentcontrol |
+| Fabric 模组 | https://github.com/yulimfish/agentcontrol-fabric |
+| 文档 | https://github.com/yulimfish/agentcontrol-docs |
+
 ## 与其他仓库的关系
 
 - `AgentControl`：总仓，协调 Fabric、MCP 和文档项目。
