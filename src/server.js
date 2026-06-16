@@ -88,6 +88,35 @@ async function fetchClientAction(params) {
   }
 }
 
+async function fetchClientState(scanRadius) {
+  const url = new URL(clientStateUrl);
+  if (scanRadius !== undefined && scanRadius !== null) {
+    url.searchParams.set("scanRadius", String(scanRadius));
+  }
+
+  let response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(3_000) });
+  } catch (error) {
+    throw new Error(
+      `Could not reach Fabric client state mod at ${clientStateUrl}. `
+        + "Install the mod, start Minecraft with Fabric, and join/open a world before retrying. "
+        + `Cause: ${error.message}`,
+    );
+  }
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Fabric client state mod returned HTTP ${response.status}: ${text}`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
 async function tapKey(key) {
   const spec = keyMap[key];
   if (!spec) throw new Error(`Unsupported key: ${key}`);
@@ -225,29 +254,15 @@ end run
 
 server.tool(
   "get_client_state",
-  "Read local Fabric client state exposed by the optional AgentControl Fabric mod.",
-  {},
-  async () => {
-    let response;
+  "Read local Fabric client state exposed by the optional AgentControl Fabric mod. Optionally specify a scan radius (1-16) for nearby block scanning.",
+  {
+    scan_radius: z.number().int().min(1).max(16).optional().describe("Radius for nearby block scan (1-16 blocks). Default is 4. Larger values return more blocks but increase response size."),
+  },
+  async ({ scan_radius }) => {
     try {
-      response = await fetch(clientStateUrl, { signal: AbortSignal.timeout(3_000) });
+      return jsonResult(await fetchClientState(scan_radius));
     } catch (error) {
-      throw new Error(
-        `Could not reach Fabric client state mod at ${clientStateUrl}. `
-          + "Install the mod, start Minecraft with Fabric, and join/open a world before retrying. "
-          + `Cause: ${error.message}`,
-      );
-    }
-
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(`Fabric client state mod returned HTTP ${response.status}: ${text}`);
-    }
-
-    try {
-      return jsonResult(JSON.parse(text));
-    } catch {
-      return result(text);
+      throw new Error(error.message);
     }
   },
 );
@@ -300,6 +315,31 @@ server.tool(
   "Place/use the held item on the block currently targeted by the crosshair through the Fabric client mod.",
   {},
   async () => jsonResult(await fetchClientAction({ type: "place_crosshair" })),
+);
+
+server.tool(
+  "mod_select_slot",
+  "Select a hotbar slot (0-8) through the Fabric client mod.",
+  {
+    slot: z.number().int().min(0).max(8),
+  },
+  async ({ slot }) => jsonResult(await fetchClientAction({ type: "select_slot", slot })),
+);
+
+server.tool(
+  "mod_drop",
+  "Drop the currently held item through the Fabric client mod.",
+  {
+    stack: z.boolean().default(false).describe("If true, drop the entire stack. If false, drop one item."),
+  },
+  async ({ stack }) => jsonResult(await fetchClientAction({ type: "drop", stack })),
+);
+
+server.tool(
+  "mod_swap_hands",
+  "Swap the item in the main hand with the item in the off hand through the Fabric client mod.",
+  {},
+  async () => jsonResult(await fetchClientAction({ type: "swap_hands" })),
 );
 
 server.tool(
