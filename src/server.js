@@ -444,7 +444,7 @@ server.tool(
 
 server.tool(
   "mod_move_to",
-  "Move toward target X/Z coordinates. PREFERRED METHOD for navigation — use this instead of manual look_facing + mod_move_player duration estimation. Automatically calculates direction, estimates travel time (~4.3 blocks/sec), detects 1-block obstacles ahead and auto-jumps. Returns distance, durationMs, and whether it jumped. After movement completes, ALWAYS call get_client_state to verify final position (movement is frame-rate dependent, may overshoot/undershoot by 1-2 blocks). Coordinate reference: x increases=east, x decreases=west; z increases=south, z decreases=north. Only handles horizontal movement — player must already be on correct Y level.",
+  "Move toward target X/Z coordinates. PREFERRED METHOD for navigation — use this instead of manual look_facing + mod_move_player duration estimation. Automatically calculates direction, estimates travel time (~4.3 blocks/sec), detects 1-block obstacles ahead and auto-jumps. Returns distance, durationMs, and whether it jumped. After movement completes, ALWAYS call get_client_state to verify final position (movement is frame-rate dependent, may overshoot/undershoot by 1-2 blocks). Coordinate reference: x increases=east, x decreases=west; z increases=south, z decreases=north. Only handles horizontal movement — player must already be correct Y level. WARNING: Does not work in water — water movement uses swim mechanics, not walk. In water, use mod_move_player with manual direction control instead.",
   {
     x: z.number().describe("Target X coordinate"),
     z: z.number().describe("Target Z coordinate"),
