@@ -254,7 +254,7 @@ end run
 
 server.tool(
   "get_client_state",
-  "Read local Fabric client state exposed by the optional AgentControl Fabric mod. Optionally specify a scan radius (1-16) for nearby block scanning.",
+  "Read local Fabric client state exposed by the optional AgentControl Fabric mod. IMPORTANT: Check the 'screen' field in the returned state before any action. If 'screen' is not null (e.g., ESC pause menu is open), use mod_close_screen first, then mod_release_mouse if still open. Only proceed with actions when screen is null.",
   {
     scan_radius: z.number().int().min(1).max(16).optional().describe("Radius for nearby block scan (1-16 blocks). Default is 4. Larger values return more blocks but increase response size."),
   },
@@ -269,7 +269,7 @@ server.tool(
 
 server.tool(
   "mod_move_player",
-  "Move the current player through the Fabric client mod, without macOS keyboard automation.",
+  "Move the current player through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null (no ESC menu open). If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed. Only then execute this action.",
   {
     direction: z.enum(["forward", "back", "left", "right", "jump", "sneak", "sprint"]),
     duration_ms: z.number().int().min(50).max(10_000).default(1000),
@@ -281,7 +281,7 @@ server.tool(
 
 server.tool(
   "mod_look",
-  "Set the current player's yaw and pitch through the Fabric client mod.",
+  "Set the current player's yaw and pitch through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
   {
     yaw: z.number().min(-180).max(180),
     pitch: z.number().min(-90).max(90),
@@ -291,35 +291,35 @@ server.tool(
 
 server.tool(
   "mod_attack",
-  "Attack through the Fabric client mod, equivalent to normal in-client attack behavior.",
+  "Attack through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
   {},
   async () => jsonResult(await fetchClientAction({ type: "attack" })),
 );
 
 server.tool(
   "mod_use_item",
-  "Use the held item through the Fabric client mod, equivalent to normal in-client use behavior.",
+  "Use the held item through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
   {},
   async () => jsonResult(await fetchClientAction({ type: "use" })),
 );
 
 server.tool(
   "mod_break_crosshair_block",
-  "Start breaking the block currently targeted by the crosshair through the Fabric client mod.",
+  "Start breaking the block currently targeted by the crosshair through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
   {},
   async () => jsonResult(await fetchClientAction({ type: "break_crosshair" })),
 );
 
 server.tool(
   "mod_place_crosshair_block",
-  "Place/use the held item on the block currently targeted by the crosshair through the Fabric client mod.",
+  "Place/use the held item on the block currently targeted by the crosshair through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
   {},
   async () => jsonResult(await fetchClientAction({ type: "place_crosshair" })),
 );
 
 server.tool(
   "mod_select_slot",
-  "Select a hotbar slot (0-8) through the Fabric client mod.",
+  "Select a hotbar slot (0-8) through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
   {
     slot: z.number().int().min(0).max(8),
   },
@@ -328,7 +328,7 @@ server.tool(
 
 server.tool(
   "mod_drop",
-  "Drop the currently held item through the Fabric client mod.",
+  "Drop the currently held item through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
   {
     stack: z.boolean().default(false).describe("If true, drop the entire stack. If false, drop one item."),
   },
@@ -337,21 +337,21 @@ server.tool(
 
 server.tool(
   "mod_swap_hands",
-  "Swap the item in the main hand with the item in the off hand through the Fabric client mod.",
+  "Swap the item in the main hand with the item in the off hand through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
   {},
   async () => jsonResult(await fetchClientAction({ type: "swap_hands" })),
 );
 
 server.tool(
   "mod_close_screen",
-  "Close the current Minecraft client screen through the Fabric client mod. Minecraft may capture the mouse afterward.",
+  "Close the current Minecraft client screen (including ESC pause menu) through the Fabric client mod. If this does not fully close the screen, use mod_release_mouse afterward. Minecraft may capture the mouse afterward.",
   {},
   async () => jsonResult(await fetchClientAction({ type: "close_screen" })),
 );
 
 server.tool(
   "mod_release_mouse",
-  "Open a transparent non-pausing screen through the Fabric client mod so the OS mouse is not captured.",
+  "Open a transparent non-pausing screen through the Fabric client mod so the OS mouse is not captured. Use this when mod_close_screen does not fully close the ESC menu or other screens. This keeps the screen open but releases mouse control.",
   {},
   async () => jsonResult(await fetchClientAction({ type: "release_mouse" })),
 );
