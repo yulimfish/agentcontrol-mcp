@@ -88,6 +88,23 @@ async function fetchClientAction(params) {
   }
 }
 
+async function ensureScreenClosed() {
+  try {
+    const state = await fetchClientState();
+    if (state.screen && state.screen !== null) {
+      await fetchClientAction({ type: "close_screen" });
+      // Wait a tick and check again
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const state2 = await fetchClientState();
+      if (state2.screen && state2.screen !== null) {
+        await fetchClientAction({ type: "release_mouse" });
+      }
+    }
+  } catch {
+    // If state endpoint is unavailable, proceed anyway
+  }
+}
+
 async function fetchClientState(scanRadius) {
   const url = new URL(clientStateUrl);
   if (scanRadius !== undefined && scanRadius !== null) {
@@ -254,7 +271,7 @@ end run
 
 server.tool(
   "get_client_state",
-  "Read local Fabric client state exposed by the optional AgentControl Fabric mod. IMPORTANT: Check the 'screen' field in the returned state before any action. If 'screen' is not null (e.g., ESC pause menu is open), use mod_close_screen first, then mod_release_mouse if still open. Only proceed with actions when screen is null.",
+  "Read local Fabric client state exposed by the optional AgentControl Fabric mod. The 'screen' field indicates whether a menu is open; this is handled automatically by action tools.",
   {
     scan_radius: z.number().int().min(1).max(16).optional().describe("Radius for nearby block scan (1-16 blocks). Default is 4. Larger values return more blocks but increase response size."),
   },
@@ -269,77 +286,130 @@ server.tool(
 
 server.tool(
   "mod_move_player",
-  "Move the current player through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null (no ESC menu open). If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed. Only then execute this action.",
+  "Move the current player through the Fabric client mod. The screen will be closed automatically if needed.",
   {
     direction: z.enum(["forward", "back", "left", "right", "jump", "sneak", "sprint"]),
     duration_ms: z.number().int().min(50).max(10_000).default(1000),
   },
-  async ({ direction, duration_ms }) => jsonResult(
-    await fetchClientAction({ type: "move", direction, durationMs: duration_ms }),
-  ),
+  async ({ direction, duration_ms }) => {
+    await ensureScreenClosed();
+    return jsonResult(
+      await fetchClientAction({ type: "move", direction, durationMs: duration_ms }),
+    );
+  },
 );
 
 server.tool(
   "mod_look",
-  "Set the current player's yaw and pitch through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
+  "Set the current player's yaw and pitch through the Fabric client mod. The screen will be closed automatically if needed.",
   {
     yaw: z.number().min(-180).max(180),
     pitch: z.number().min(-90).max(90),
   },
-  async ({ yaw, pitch }) => jsonResult(await fetchClientAction({ type: "look", yaw, pitch })),
+  async ({ yaw, pitch }) => {
+    await ensureScreenClosed();
+    return jsonResult(await fetchClientAction({ type: "look", yaw, pitch }));
+  },
+);
+
+server.tool(
+  "mod_look_at",
+  "Look at a specific world coordinate through the Fabric client mod. The screen will be closed automatically if needed. Useful for aiming at a block before breaking or placing it.",
+  {
+    x: z.number().describe("Target X coordinate in the world."),
+    y: z.number().describe("Target Y coordinate in the world."),
+    z: z.number().describe("Target Z coordinate in the world."),
+  },
+  async ({ x, y, z }) => {
+    await ensureScreenClosed();
+    return jsonResult(await fetchClientAction({ type: "look_at", x, y, z }));
+  },
+);
+
+server.tool(
+  "mod_look_facing",
+  "Face a cardinal direction or up/down through the Fabric client mod. The screen will be closed automatically if needed. Useful for orienting the player before movement.",
+  {
+    direction: z.enum(["north", "south", "east", "west", "up", "down"]).describe("Direction to face."),
+  },
+  async ({ direction }) => {
+    await ensureScreenClosed();
+    return jsonResult(await fetchClientAction({ type: "look_facing", direction }));
+  },
 );
 
 server.tool(
   "mod_attack",
-  "Attack through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
+  "Attack through the Fabric client mod. The screen will be closed automatically if needed.",
   {},
-  async () => jsonResult(await fetchClientAction({ type: "attack" })),
+  async () => {
+    await ensureScreenClosed();
+    return jsonResult(await fetchClientAction({ type: "attack" }));
+  },
 );
 
 server.tool(
   "mod_use_item",
-  "Use the held item through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
+  "Use the held item through the Fabric client mod. The screen will be closed automatically if needed.",
   {},
-  async () => jsonResult(await fetchClientAction({ type: "use" })),
+  async () => {
+    await ensureScreenClosed();
+    return jsonResult(await fetchClientAction({ type: "use" }));
+  },
 );
 
 server.tool(
   "mod_break_crosshair_block",
-  "Start breaking the block currently targeted by the crosshair through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
+  "Start breaking the block currently targeted by the crosshair through the Fabric client mod. The screen will be closed automatically if needed.",
   {},
-  async () => jsonResult(await fetchClientAction({ type: "break_crosshair" })),
+  async () => {
+    await ensureScreenClosed();
+    return jsonResult(await fetchClientAction({ type: "break_crosshair" }));
+  },
 );
 
 server.tool(
   "mod_place_crosshair_block",
-  "Place/use the held item on the block currently targeted by the crosshair through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
+  "Place/use the held item on the block currently targeted by the crosshair through the Fabric client mod. The screen will be closed automatically if needed.",
   {},
-  async () => jsonResult(await fetchClientAction({ type: "place_crosshair" })),
+  async () => {
+    await ensureScreenClosed();
+    return jsonResult(await fetchClientAction({ type: "place_crosshair" }));
+  },
 );
 
 server.tool(
   "mod_select_slot",
-  "Select a hotbar slot (0-8) through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
+  "Select a hotbar slot (0-8) through the Fabric client mod. The screen will be closed automatically if needed.",
   {
     slot: z.number().int().min(0).max(8),
   },
-  async ({ slot }) => jsonResult(await fetchClientAction({ type: "select_slot", slot })),
+  async ({ slot }) => {
+    await ensureScreenClosed();
+    return jsonResult(await fetchClientAction({ type: "select_slot", slot }));
+  },
 );
 
 server.tool(
   "mod_drop",
-  "Drop the currently held item through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
+  "Drop the currently held item through the Fabric client mod. The screen will be closed automatically if needed.",
   {
     stack: z.boolean().default(false).describe("If true, drop the entire stack. If false, drop one item."),
   },
-  async ({ stack }) => jsonResult(await fetchClientAction({ type: "drop", stack })),
+  async ({ stack }) => {
+    await ensureScreenClosed();
+    return jsonResult(await fetchClientAction({ type: "drop", stack }));
+  },
 );
 
 server.tool(
   "mod_swap_hands",
-  "Swap the item in the main hand with the item in the off hand through the Fabric client mod. IMPORTANT: Must check state first and ensure screen is null. If screen is open, close it with mod_close_screen first, then mod_release_mouse if needed.",
+  "Swap the item in the main hand with the item in the off hand through the Fabric client mod. The screen will be closed automatically if needed.",
   {},
-  async () => jsonResult(await fetchClientAction({ type: "swap_hands" })),
+  async () => {
+    await ensureScreenClosed();
+    return jsonResult(await fetchClientAction({ type: "swap_hands" }));
+  },
 );
 
 server.tool(
