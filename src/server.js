@@ -93,12 +93,6 @@ async function ensureScreenClosed() {
     const state = await fetchClientState();
     if (state.screen && state.screen !== null) {
       await fetchClientAction({ type: "close_screen" });
-      // Wait a tick and check again
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const state2 = await fetchClientState();
-      if (state2.screen && state2.screen !== null) {
-        await fetchClientAction({ type: "release_mouse" });
-      }
     }
   } catch {
     // If state endpoint is unavailable, proceed anyway
@@ -290,7 +284,7 @@ server.tool(
 
 server.tool(
   "mod_move_player",
-  "Move the current player through the Fabric client mod. The screen will be closed automatically if needed. Movement is frame-rate dependent and imprecise (~4-5 blocks/sec walking). Use longer durations (3-5s) and verify position with get_client_state rather than many short moves. To approach a target from a specific side (e.g. to avoid a blocking block), move perpendicular to the line of sight first (e.g. move east/west to get around a block in front of you), then approach. Coordinate directions: forward/back align with current yaw; x increases=east, decreases=west; z increases=south, decreases=north.",
+  "Move the current player through the Fabric client mod. For moving to specific coordinates, prefer mod_move_to which auto-calculates direction and estimates duration. This tool is for fine adjustments or when you need to move in the player's current facing direction. Movement is frame-rate dependent and imprecise (~4-5 blocks/sec walking). Use longer durations (3-5s) for big moves, 500-1000ms for fine adjustments. Always verify position with get_client_state after moving. Coordinate directions: forward/back align with current yaw; x increases=east, decreases=west; z increases=south, decreases=north.",
   {
     direction: z.enum(["forward", "back", "left", "right", "jump", "sneak", "sprint"]),
     duration_ms: z.number().int().min(50).max(10_000).default(1000).describe("Duration in milliseconds. Use 3000-5000 for longer moves, 500-1000 for fine adjustments."),
@@ -299,6 +293,22 @@ server.tool(
     await ensureScreenClosed();
     return jsonResult(
       await fetchClientAction({ type: "move", direction, durationMs: duration_ms }),
+    );
+  },
+);
+
+server.tool(
+  "mod_move_multi",
+  "Move the player with multiple simultaneous key presses (e.g. jump+forward to jump over obstacles). The screen will be closed automatically if needed. Combine directions with '+'. Example: 'jump+forward' jumps while moving forward.",
+  {
+    directions: z.string().describe("Comma-separated directions to press simultaneously. Options: forward, back, left, right, jump, sneak, sprint. Example: 'jump,forward'"),
+    duration_ms: z.number().int().min(50).max(10_000).default(1000).describe("Duration in milliseconds."),
+  },
+  async ({ directions, duration_ms }) => {
+    await ensureScreenClosed();
+    const dirs = directions.replace(/\+/g, ",");
+    return jsonResult(
+      await fetchClientAction({ type: "move_multi", directions: dirs, durationMs: duration_ms }),
     );
   },
 );
@@ -364,7 +374,7 @@ server.tool(
 
 server.tool(
   "mod_break_crosshair_block",
-  "Start breaking the block currently targeted by the crosshair through the Fabric client mod. The screen will be closed automatically if needed. CRITICAL: Before calling this tool, you MUST verify that crosshairTarget is not null AND matches the intended block via get_client_state. Check crosshairTarget.block for the block ID, and crosshairTarget.properties for variant info like color (e.g. color:purple for a purple shulker box). If crosshairTarget is null or points to the wrong block, adjust position or use mod_look_at first. DO NOT call this blindly—always verify the target first.",
+  "Break the block currently targeted by the crosshair. For breaking blocks at known coordinates, prefer mod_break_block which auto-aims. This tool is for when you already have the crosshair on the right block (e.g. after mod_look_at + verify). CRITICAL: Before calling, verify crosshairTarget is not null and matches the intended block via get_client_state. Check crosshairTarget.block and crosshairTarget.properties (e.g. color:purple) match your target.",
   {},
   async () => {
     await ensureScreenClosed();
@@ -413,6 +423,37 @@ server.tool(
   async () => {
     await ensureScreenClosed();
     return jsonResult(await fetchClientAction({ type: "swap_hands" }));
+  },
+);
+
+server.tool(
+  "mod_break_block",
+  "Break a block at specific world coordinates. PREFERRED METHOD for breaking blocks — use this instead of the 3-step look_at + get_client_state(verify) + break_crosshair workflow. Automatically aims at block center and attacks. If the block is covered by another block (e.g. grass covering a bed at y+1), break the covering block FIRST with mod_break_block(x, y+1, z), then break the target. Works within ~4.5 blocks survival reach. Returns ok:true if the block was targeted.",
+  {
+    x: z.number().describe("X coordinate of the block to break"),
+    y: z.number().describe("Y coordinate of the block to break"),
+    z: z.number().describe("Z coordinate of the block to break"),
+  },
+  async ({ x, y, z }) => {
+    await ensureScreenClosed();
+    return jsonResult(
+      await fetchClientAction({ type: "break_block", x, y, z }),
+    );
+  },
+);
+
+server.tool(
+  "mod_move_to",
+  "Move toward target X/Z coordinates. PREFERRED METHOD for navigation — use this instead of manual look_facing + mod_move_player duration estimation. Automatically calculates direction, estimates travel time (~4.3 blocks/sec), detects 1-block obstacles ahead and auto-jumps. Returns distance, durationMs, and whether it jumped. After movement completes, ALWAYS call get_client_state to verify final position (movement is frame-rate dependent, may overshoot/undershoot by 1-2 blocks). Coordinate reference: x increases=east, x decreases=west; z increases=south, z decreases=north. Only handles horizontal movement — player must already be on correct Y level.",
+  {
+    x: z.number().describe("Target X coordinate"),
+    z: z.number().describe("Target Z coordinate"),
+  },
+  async ({ x, z }) => {
+    await ensureScreenClosed();
+    return jsonResult(
+      await fetchClientAction({ type: "move_to", x, z }),
+    );
   },
 );
 
