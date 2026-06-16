@@ -105,10 +105,13 @@ async function ensureScreenClosed() {
   }
 }
 
-async function fetchClientState(scanRadius) {
+async function fetchClientState(scanRadius, filter) {
   const url = new URL(clientStateUrl);
   if (scanRadius !== undefined && scanRadius !== null) {
     url.searchParams.set("scanRadius", String(scanRadius));
+  }
+  if (filter !== undefined && filter !== null && filter !== "") {
+    url.searchParams.set("filter", String(filter));
   }
 
   let response;
@@ -271,13 +274,14 @@ end run
 
 server.tool(
   "get_client_state",
-  "Read local Fabric client state exposed by the optional AgentControl Fabric mod. The 'screen' field indicates whether a menu is open; this is handled automatically by action tools.",
+  "Read local Fabric client state exposed by the optional AgentControl Fabric mod. The 'screen' field indicates whether a menu is open; this is handled automatically by action tools. Use 'filter' to efficiently search for specific blocks (e.g. 'shulker_box' or 'chest') without flooding the response with stone/dirt. The 'crosshairTarget.properties' field reveals block variants like color, orientation, or facing.",
   {
     scan_radius: z.number().int().min(1).max(16).optional().describe("Radius for nearby block scan (1-16 blocks). Default is 4. Larger values return more blocks but increase response size."),
+    filter: z.string().optional().describe("Filter nearbyBlocks by block ID substring. Only blocks whose ID contains this string are returned. Use this to efficiently locate specific blocks (e.g. 'shulker_box', 'lantern', 'chest') without receiving thousands of stone/dirt entries."),
   },
-  async ({ scan_radius }) => {
+  async ({ scan_radius, filter }) => {
     try {
-      return jsonResult(await fetchClientState(scan_radius));
+      return jsonResult(await fetchClientState(scan_radius, filter));
     } catch (error) {
       throw new Error(error.message);
     }
@@ -286,10 +290,10 @@ server.tool(
 
 server.tool(
   "mod_move_player",
-  "Move the current player through the Fabric client mod. The screen will be closed automatically if needed.",
+  "Move the current player through the Fabric client mod. The screen will be closed automatically if needed. Movement is frame-rate dependent and imprecise (~4-5 blocks/sec walking). Use longer durations (3-5s) and verify position with get_client_state rather than many short moves. To approach a target from a specific side (e.g. to avoid a blocking block), move perpendicular to the line of sight first (e.g. move east/west to get around a block in front of you), then approach. Coordinate directions: forward/back align with current yaw; x increases=east, decreases=west; z increases=south, decreases=north.",
   {
     direction: z.enum(["forward", "back", "left", "right", "jump", "sneak", "sprint"]),
-    duration_ms: z.number().int().min(50).max(10_000).default(1000),
+    duration_ms: z.number().int().min(50).max(10_000).default(1000).describe("Duration in milliseconds. Use 3000-5000 for longer moves, 500-1000 for fine adjustments."),
   },
   async ({ direction, duration_ms }) => {
     await ensureScreenClosed();
@@ -314,11 +318,11 @@ server.tool(
 
 server.tool(
   "mod_look_at",
-  "Look at a specific world coordinate through the Fabric client mod. The screen will be closed automatically if needed. Useful for aiming at a block before breaking or placing it.",
+  "Look at a specific world coordinate through the Fabric client mod. The screen will be closed automatically if needed. If an integer block coordinate is passed (e.g. x=128, y=64, z=-256), the mod automatically adds 0.5 to target the block center, ensuring the raycast hits the block's collision box rather than passing through the block edge. After calling this, ALWAYS call get_client_state to verify crosshairTarget.block and crosshairTarget.properties (e.g. color) match your intended target before breaking or placing. If the target is wrong, move to a different angle (e.g. approach from the east or west side) and try again.",
   {
-    x: z.number().describe("Target X coordinate in the world."),
-    y: z.number().describe("Target Y coordinate in the world."),
-    z: z.number().describe("Target Z coordinate in the world."),
+    x: z.number().describe("Target X coordinate in the world. If integer, mod adds 0.5 to center."),
+    y: z.number().describe("Target Y coordinate in the world. If integer, mod adds 0.5 to center."),
+    z: z.number().describe("Target Z coordinate in the world. If integer, mod adds 0.5 to center."),
   },
   async ({ x, y, z }) => {
     await ensureScreenClosed();
@@ -328,9 +332,9 @@ server.tool(
 
 server.tool(
   "mod_look_facing",
-  "Face a cardinal direction or up/down through the Fabric client mod. The screen will be closed automatically if needed. Useful for orienting the player before movement.",
+  "Face a cardinal direction or up/down through the Fabric client mod. The screen will be closed automatically if needed. Useful for orienting the player before movement. Coordinate reference: north=decrease Z, south=increase Z, west=decrease X, east=increase X. Example: to move toward a block at z=543 from z=532, face south (z increases southward).",
   {
-    direction: z.enum(["north", "south", "east", "west", "up", "down"]).describe("Direction to face."),
+    direction: z.enum(["north", "south", "east", "west", "up", "down"]).describe("Direction to face. north=decrease Z, south=increase Z, west=decrease X, east=increase X."),
   },
   async ({ direction }) => {
     await ensureScreenClosed();
@@ -360,7 +364,7 @@ server.tool(
 
 server.tool(
   "mod_break_crosshair_block",
-  "Start breaking the block currently targeted by the crosshair through the Fabric client mod. The screen will be closed automatically if needed.",
+  "Start breaking the block currently targeted by the crosshair through the Fabric client mod. The screen will be closed automatically if needed. CRITICAL: Before calling this tool, you MUST verify that crosshairTarget is not null AND matches the intended block via get_client_state. Check crosshairTarget.block for the block ID, and crosshairTarget.properties for variant info like color (e.g. color:purple for a purple shulker box). If crosshairTarget is null or points to the wrong block, adjust position or use mod_look_at first. DO NOT call this blindly—always verify the target first.",
   {},
   async () => {
     await ensureScreenClosed();
@@ -370,7 +374,7 @@ server.tool(
 
 server.tool(
   "mod_place_crosshair_block",
-  "Place/use the held item on the block currently targeted by the crosshair through the Fabric client mod. The screen will be closed automatically if needed.",
+  "Place/use the held item on the block currently targeted by the crosshair through the Fabric client mod. The screen will be closed automatically if needed. IMPORTANT: Before calling this tool, you MUST verify that crosshairTarget is not null and matches the intended block via get_client_state. If crosshairTarget is null or points to the wrong block, adjust position or use mod_look_at first.",
   {},
   async () => {
     await ensureScreenClosed();
